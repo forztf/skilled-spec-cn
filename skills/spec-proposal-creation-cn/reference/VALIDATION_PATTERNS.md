@@ -118,9 +118,9 @@ REQS=$(grep -c "### Requirement:" spec/changes/{change-id}/specs/**/*.md)
 # 统计场景数量
 SCENARIOS=$(grep -c "#### Scenario:" spec/changes/{change-id}/specs/**/*.md)
 
-echo "Requirements: $REQS"
-echo "Scenarios: $SCENARIOS"
-echo "Ratio: $(echo "scale=1; $SCENARIOS/$REQS" | bc)"
+echo "需求数：$REQS"
+echo "场景数：$SCENARIOS"
+echo "比率：$(echo "scale=1; $SCENARIOS/$REQS" | bc)"
 ```
 
 **预期**：比率 >= 2.0（每个需求至少 2 个场景）
@@ -145,76 +145,76 @@ grep -c "SHALL" spec/changes/{change-id}/specs/**/*.md
 CHANGE_ID="$1"
 BASE_PATH="spec/changes/$CHANGE_ID"
 
-echo "Validating proposal: $CHANGE_ID"
+echo "正在验证提案：$CHANGE_ID"
 echo "================================"
 
 # 1. 目录存在
 if [ ! -d "$BASE_PATH" ]; then
-    echo "✗ Change directory not found"
+    echo "✗ 变更目录未找到"
     exit 1
 fi
-echo "✓ Change directory exists"
+echo "✓ 变更目录存在"
 
 # 2. 必需文件存在
 for file in proposal.md tasks.md; do
     if [ ! -f "$BASE_PATH/$file" ]; then
-        echo "✗ Missing $file"
+        echo "✗ 缺少 $file"
         exit 1
     fi
-    echo "✓ Found $file"
+    echo "✓ 找到 $file"
 done
 
 # 3. 提案包含必需章节
 for section in "## Why" "## What Changes" "## Impact"; do
     if ! grep -q "$section" "$BASE_PATH/proposal.md"; then
-        echo "✗ proposal.md missing section: $section"
+        echo "✗ proposal.md 缺少章节：$section"
         exit 1
     fi
 done
-echo "✓ Proposal has required sections"
+echo "✓ proposal.md 包含所需章节"
 
 # 4. 任务文件包含编号任务
 TASK_COUNT=$(grep -c "^[0-9]\+\." "$BASE_PATH/tasks.md" || echo "0")
 if [ "$TASK_COUNT" -lt 3 ]; then
-    echo "✗ tasks.md has insufficient tasks ($TASK_COUNT)"
+    echo "✗ tasks.md 任务数量不足（$TASK_COUNT）"
     exit 1
 fi
-echo "✓ Found $TASK_COUNT tasks"
+echo "✓ 找到 $TASK_COUNT 个任务"
 
 # 5. 存在规范差异文件
 DELTA_COUNT=$(find "$BASE_PATH/specs" -name "*.md" 2>/dev/null | wc -l)
 if [ "$DELTA_COUNT" -eq 0 ]; then
-    echo "✗ No spec delta files found"
+    echo "✗ 未找到规范差异文件"
     exit 1
 fi
-echo "✓ Found $DELTA_COUNT spec delta file(s)"
+echo "✓ 找到 $DELTA_COUNT 个规范差异文件"
 
 # 6. 存在差异操作
 OPERATIONS=$(grep -h "## ADDED\|MODIFIED\|REMOVED" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
 if [ "$OPERATIONS" -eq 0 ]; then
-    echo "✗ No delta operations found"
+    echo "✗ 未发现差异操作"
     exit 1
 fi
-echo "✓ Found $OPERATIONS delta operation(s)"
+echo "✓ 找到 $OPERATIONS 个差异操作"
 
 # 7. 需求具备场景
 REQ_COUNT=$(grep -h "### Requirement:" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
 SCENARIO_COUNT=$(grep -h "#### Scenario:" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
 
 if [ "$REQ_COUNT" -eq 0 ]; then
-    echo "✗ No requirements found"
+    echo "✗ 未找到任何需求"
     exit 1
 fi
 
 if [ "$SCENARIO_COUNT" -lt "$REQ_COUNT" ]; then
-    echo "⚠ Warning: Fewer scenarios ($SCENARIO_COUNT) than requirements ($REQ_COUNT)"
-    echo "  Recommendation: At least 2 scenarios per requirement"
+    echo "⚠ 警告：场景数（$SCENARIO_COUNT）少于需求数（$REQ_COUNT）"
+    echo "  建议：每个需求至少包含 2 个场景"
 else
-    echo "✓ Found $REQ_COUNT requirement(s) with $SCENARIO_COUNT scenario(s)"
+    echo "✓ 找到 $REQ_COUNT 个需求，包含 $SCENARIO_COUNT 个场景"
 fi
 
 echo "================================"
-echo "✓ Validation passed"
+echo "✓ 验证通过"
 ```
 
 **用法**：
@@ -253,7 +253,7 @@ grep -n "^###\? Scenario:\|^#####+ Scenario:" spec/changes/{change-id}/specs/**/
 for file in spec/changes/{change-id}/specs/**/*.md; do
     if grep -q "### Requirement:" "$file" && \
        ! grep -q "## ADDED\|MODIFIED\|REMOVED" "$file"; then
-        echo "Missing delta operation in: $file"
+        echo "缺少差异操作：$file"
     fi
 done
 ```
@@ -272,7 +272,7 @@ test -f spec/changes/$CHANGE_ID/tasks.md && \
 grep -q "## ADDED\|MODIFIED\|REMOVED" spec/changes/$CHANGE_ID/specs/**/*.md && \
 grep -q "### Requirement:" spec/changes/$CHANGE_ID/specs/**/*.md && \
 grep -q "#### Scenario:" spec/changes/$CHANGE_ID/specs/**/*.md && \
-echo "✓ All validations passed" || echo "✗ Validation failed"
+echo "✓ 所有验证通过" || echo "✗ 验证失败"
 ```
 
 ### 显示提案摘要
@@ -280,11 +280,11 @@ echo "✓ All validations passed" || echo "✗ Validation failed"
 ```bash
 # 展示提案概览
 CHANGE_ID="add-user-auth"
-echo "Proposal: $CHANGE_ID"
-echo "Files: $(find spec/changes/$CHANGE_ID -type f | wc -l)"
-echo "Tasks: $(grep -c "^[0-9]\+\." spec/changes/$CHANGE_ID/tasks.md)"
-echo "Requirements: $(grep -h "### Requirement:" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
-echo "Scenarios: $(grep -h "#### Scenario:" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
+echo "提案：$CHANGE_ID"
+echo "文件数：$(find spec/changes/$CHANGE_ID -type f | wc -l)"
+echo "任务数：$(grep -c \"^[0-9]\\+\.\" spec/changes/$CHANGE_ID/tasks.md)"
+echo "需求数：$(grep -h \"### Requirement:\" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
+echo "场景数：$(grep -h \"#### Scenario:\" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
 ```
 
 ## 验证清单

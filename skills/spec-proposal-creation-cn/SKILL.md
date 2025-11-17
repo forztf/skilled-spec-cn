@@ -38,13 +38,13 @@ description: 通过规范驱动的方法创建结构化的变更提案与规范�
 
 ```bash
 # 列出所有现有规范
-find 'spec/specs' -type f -name 'spec.md'
+find spec/specs -name "spec.md" -type f
 
 # 列出进行中的变更以避免冲突
-find 'spec/changes' -maxdepth 1 -mindepth 1 -type d ! -name 'archive'
+find spec/changes -maxdepth 1 -type d -not -path "*/archive"
 
 # 搜索相关需求
-grep -R -n '^### Requirement:' spec/specs --include='*.md'
+grep -r "### Requirement:" spec/specs/
 ```
 
 ### 第 2 步：生成唯一的变更 ID
@@ -61,8 +61,7 @@ grep -R -n '^### Requirement:' spec/specs --include='*.md'
 
 **校验**：检查是否冲突：
 ```bash
-# 检查是否存在冲突的变更 ID（忽略大小写）
-find 'spec/changes' -maxdepth 1 -mindepth 1 -type d | sed -E 's#.*/##' | grep -i '<proposed-id>'
+ls spec/changes/ | grep -i "<proposed-id>"
 ```
 
 ### 第 3 步：生成目录结构
@@ -71,13 +70,12 @@ find 'spec/changes' -maxdepth 1 -mindepth 1 -type d | sed -E 's#.*/##' | grep -i
 
 ```bash
 # 将 {change-id} 替换为实际 ID
-mkdir -p "spec/changes/{change-id}/specs/{capability-name}"
+mkdir -p spec/changes/{change-id}/specs/{capability-name}
 ```
 
 **示例**：
 ```bash
-# 示例：创建变更目录
-mkdir -p 'spec/changes/add-user-auth/specs/authentication'
+mkdir -p spec/changes/add-user-auth/specs/authentication
 ```
 
 ### 第 4 步：起草 proposal.md
@@ -156,13 +154,13 @@ AND 重定向至仪表盘
 **自动化检查**：
 ```bash
 # 统计差异操作（应 > 0）
-grep -R -E '## ADDED|MODIFIED|REMOVED' "spec/changes/{change-id}/specs" --include='*.md' | wc -l
+grep -c "## ADDED\|MODIFIED\|REMOVED" spec/changes/{change-id}/specs/**/*.md
 
 # 验证场景格式（显示行号）
-grep -R -n '#### Scenario:' "spec/changes/{change-id}/specs" --include='*.md'
+grep -n "#### Scenario:" spec/changes/{change-id}/specs/**/*.md
 
 # 检查需求标题
-grep -R -n '### Requirement:' "spec/changes/{change-id}/specs" --include='*.md'
+grep -n "### Requirement:" spec/changes/{change-id}/specs/**/*.md
 ```
 
 ### 第 8 步：提交用户评审
@@ -247,4 +245,4 @@ grep -R -n '### Requirement:' "spec/changes/{change-id}/specs" --include='*.md'
 
 ---
 
-**Token 预算**：此 SKILL.md 约 450 行，低于建议的 500 行上限。引用文件按需加载以逐步呈现。
+**Token 预算**：此 SKILL.md 约 250 行，低于建议的 500 行上限。引用文件按需加载以逐步呈现。

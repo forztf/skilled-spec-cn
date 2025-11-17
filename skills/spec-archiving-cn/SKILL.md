@@ -37,10 +37,10 @@ description: 归档已完成的变更并将规范差异合并到常驻文档。�
 
 ```bash
 # 检查 IMPLEMENTED 标记
-[ -f "spec/changes/{change-id}/IMPLEMENTED" ] && echo "✓ Implemented" || echo "✗ Not implemented"
+test -f spec/changes/{change-id}/IMPLEMENTED && echo "✓ 已实施" || echo "✗ 未实施"
 
 # 查看任务
-cat "spec/changes/{change-id}/tasks.md"
+cat spec/changes/{change-id}/tasks.md
 
 # 使用 git 检查未提交工作
 git status
@@ -59,12 +59,12 @@ git status
 
 ```bash
 # 列出所有规范差异文件
-find "spec/changes/{change-id}/specs" -type f -name "*.md"
+find spec/changes/{change-id}/specs -name "*.md" -type f
 
 # 读取每个差异文件
-find "spec/changes/{change-id}/specs" -type f -name "*.md" | while read -r f; do
-  echo "=== $f ==="
-  cat "$f"
+for file in spec/changes/{change-id}/specs/**/*.md; do
+    echo "=== $file ==="
+    cat "$file"
 done
 ```
 
@@ -77,14 +77,14 @@ done
 
 ```bash
 # 以当天日期创建归档目录
-TIMESTAMP=$(date +%F)
-mkdir -p "spec/archive/${TIMESTAMP}-{change-id}"
+TIMESTAMP=$(date +%Y-%m-%d)
+mkdir -p spec/archive/${TIMESTAMP}-{change-id}
 ```
 
 **示例**：
 ```bash
 # 对 2025-10-26 归档的 "add-user-auth" 变更
-mkdir -p 'spec/archive/2025-10-26-add-user-auth'
+mkdir -p spec/archive/2025-10-26-add-user-auth
 ```
 
 ### 第 4 步：合并 ADDED 需求到常驻规范
@@ -114,8 +114,9 @@ THEN 系统创建会话
 
 **目标**（`spec/specs/authentication/spec.md`）：
 ```bash
-# 追加到常驻规范（使用 heredoc 并追加）
-cat >> 'spec/specs/authentication/spec.md' <<'EOF'
+# 追加到常驻规范
+cat >> spec/specs/authentication/spec.md << 'EOF'
+
 ### Requirement: 用户登录
 WHEN 用户提交有效凭据,
 系统 SHALL 认证用户并创建会话。
@@ -139,19 +140,21 @@ EOF
 **示例（使用 sed）**：
 
 ```bash
-# 查找并替换需求块（概念示例；实际实现取决于结构）
-path='spec/specs/authentication/spec.md'
-start=$(grep -n -E '^### Requirement:\s*用户登录' "$path" | head -1 | cut -d: -f1)
-if [ -n "$start" ]; then
-  next=$(grep -n '^### Requirement:' "$path" | awk -v s=$start -F: '$1>s{print $1; exit}')
-  end=${next:-$(wc -l < "$path")}
-  new_file='spec/changes/{change-id}/specs/authentication/spec-delta.md'
-  {
-    head -n $((start-1)) "$path"
-    cat "$new_file"
-    tail -n $(( $(wc -l < "$path") - end )) "$path"
-  } > "$path.tmp" && mv "$path.tmp" "$path"
-fi
+# 查找并替换需求块
+# 这是概念示例——实际实现取决于结构
+
+# 首先，确定旧需求的起始行
+START_LINE=$(grep -n "### Requirement: 用户登录" spec/specs/authentication/spec.md | cut -d: -f1)
+
+# 查找结束位置（下一个需求或文件末尾）
+END_LINE=$(tail -n +$((START_LINE + 1)) spec/specs/authentication/spec.md | \
+           grep -n "^### Requirement:" | head -1 | cut -d: -f1)
+
+# 删除旧需求
+sed -i "${START_LINE},${END_LINE}d" spec/specs/authentication/spec.md
+
+# 在相同位置插入新需求
+#（从差异文件提取并插入）
 ```
 
 **手动方式**（出于安全建议）：
@@ -179,9 +182,9 @@ fi
 # 手动编辑 spec/specs/authentication/spec.md
 
 # 添加弃用注释
-printf "<!-- Requirement 'Legacy Password Reset' removed %s -->\n" "$(date +%F)" >> 'spec/specs/authentication/spec.md'
+echo "<!-- Requirement 'Legacy Password Reset' removed $(date +%Y-%m-%d) -->" >> spec/specs/authentication/spec.md
 
-# 通过手动或脚本删除该需求块（参考上文替换示例）
+# 通过手动或 sed 删除该需求块
 ```
 
 **模式**：
@@ -196,16 +199,16 @@ printf "<!-- Requirement 'Legacy Password Reset' removed %s -->\n" "$(date +%F)"
 
 ```bash
 # 将完整的变更目录移动到归档
-mv "spec/changes/{change-id}" "spec/archive/${TIMESTAMP}-{change-id}"
+mv spec/changes/{change-id} spec/archive/${TIMESTAMP}-{change-id}
 ```
 
 **验证移动成功**：
 ```bash
 # 检查归档是否存在
-ls -la "spec/archive/${TIMESTAMP}-{change-id}"
+ls -la spec/archive/${TIMESTAMP}-{change-id}
 
-# 检查 changes 目录是否干净（应无匹配项）
-find 'spec/changes' -maxdepth 1 -mindepth 1 -type d -name '{change-id}'
+# 检查 changes 目录是否干净
+ls spec/changes/ | grep "{change-id}"  # 应无结果
 ```
 
 ### 第 8 步：验证常驻规范结构
@@ -214,15 +217,15 @@ find 'spec/changes' -maxdepth 1 -mindepth 1 -type d -name '{change-id}'
 
 ```bash
 # 检查需求格式
-grep -R -n '### Requirement:' 'spec/specs' --include='spec.md'
+grep -n "### Requirement:" spec/specs/**/*.md
 
 # 检查场景格式
-grep -R -n '#### Scenario:' 'spec/specs' --include='spec.md'
+grep -n "#### Scenario:" spec/specs/**/*.md
 
 # 统计每个规范中的需求数量
-find 'spec/specs' -type f -name 'spec.md' | while read -r spec; do
-  count=$(grep -c '### Requirement:' "$spec")
-  printf "%s: %d requirements\n" "$spec" "$count"
+for spec in spec/specs/**/spec.md; do
+    count=$(grep -c "### Requirement:" "$spec")
+    echo "$spec: $count 条需求"
 done
 ```
 
@@ -286,7 +289,7 @@ git add spec/specs/
 git commit -m "Merge spec deltas from add-user-auth"
 
 # 然后再归档
-mv 'spec/changes/add-user-auth' 'spec/archive/2025-10-26-add-user-auth'
+mv spec/changes/add-user-auth spec/archive/2025-10-26-add-user-auth
 ```
 
 ### 模式 2：原子化归档
@@ -296,13 +299,13 @@ mv 'spec/changes/add-user-auth' 'spec/archive/2025-10-26-add-user-auth'
 **好**：
 ```bash
 # 移动完整变更目录
-mv 'spec/changes/add-user-auth' 'spec/archive/2025-10-26-add-user-auth'
+mv spec/changes/add-user-auth spec/archive/2025-10-26-add-user-auth
 ```
 
 **坏**：
 ```bash
 # 不要挑拣文件
-mv 'spec/changes/add-user-auth/proposal.md' 'spec/archive/'
+mv spec/changes/add-user-auth/proposal.md spec/archive/
 #（会留下孤儿文件）
 ```
 

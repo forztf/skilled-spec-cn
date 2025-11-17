@@ -37,13 +37,13 @@ description: 以测试与验证为先的方式，按序执行并实现已批准�
 
 ```bash
 # 读取提案
-cat "spec/changes/{change-id}/proposal.md"
+cat spec/changes/{change-id}/proposal.md
 
 # 读取所有任务
-cat "spec/changes/{change-id}/tasks.md"
+cat spec/changes/{change-id}/tasks.md
 
 # 读取规范差异以理解需求
-find "spec/changes/{change-id}/specs" -type f -name "*.md" -print0 | xargs -0 -I{} cat "{}"
+find spec/changes/{change-id}/specs -name "*.md" -exec cat {} \;
 ```
 
 **理解**：
@@ -138,8 +138,10 @@ npm run db:schema
 
 **API 相关任务**：
 ```bash
-# 手动测试端点（使用 curl）
-curl -X POST -H 'Content-Type: application/json' -d '{"test":"data"}' 'http://localhost:3000/api/endpoint'
+# 手动测试端点
+curl -X POST http://localhost:3000/api/endpoint \
+  -H "Content-Type: application/json" \
+  -d '{"test": "data"}'
 
 # 或运行集成测试
 npm run test:integration
@@ -162,8 +164,8 @@ npm run test:integration
 在所有任务完成后：
 
 ```bash
-# 创建完成标记（写入时间戳）
-printf "实现提案: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" > "spec/changes/{change-id}/IMPLEMENTED"
+# 创建完成标记
+echo "Implementation completed: $(date)" > spec/changes/{change-id}/IMPLEMENTED
 ```
 
 **告知用户**：
