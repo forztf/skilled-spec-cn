@@ -1,6 +1,6 @@
 {
   "name": "skilled-spec-cn",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "面向规范的开发，适用于 Claude Code —— 使用自然语言技能进行结构化需求与测试驱动的实现",
   "keywords": [
     "claude-code",
