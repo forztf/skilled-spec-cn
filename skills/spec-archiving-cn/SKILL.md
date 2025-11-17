@@ -35,12 +35,12 @@ description: 归档已完成的变更并将规范差异合并到常驻文档。�
 
 在归档前确认所有工作已完成：
 
-```powershell
+```bash
 # 检查 IMPLEMENTED 标记
-if (Test-Path "spec/changes/{change-id}/IMPLEMENTED") { Write-Output "✓ Implemented" } else { Write-Output "✗ Not implemented" }
+[ -f "spec/changes/{change-id}/IMPLEMENTED" ] && echo "✓ Implemented" || echo "✗ Not implemented"
 
 # 查看任务
-Get-Content -Path "spec/changes/{change-id}/tasks.md"
+cat "spec/changes/{change-id}/tasks.md"
 
 # 使用 git 检查未提交工作
 git status
@@ -57,16 +57,15 @@ git status
 
 了解需要合并的内容：
 
-```powershell
+```bash
 # 列出所有规范差异文件
-Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter "*.md"
+find "spec/changes/{change-id}/specs" -type f -name "*.md"
 
 # 读取每个差异文件
-Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter "*.md" |
-  ForEach-Object {
-    Write-Output ("=== {0} ===" -f $_.FullName)
-    Get-Content -Path $_.FullName
-  }
+find "spec/changes/{change-id}/specs" -type f -name "*.md" | while read -r f; do
+  echo "=== $f ==="
+  cat "$f"
+done
 ```
 
 **识别**：
@@ -76,16 +75,16 @@ Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter "*.md" |
 
 ### 第 3 步：创建带时间戳的归档目录
 
-```powershell
+```bash
 # 以当天日期创建归档目录
-$TIMESTAMP = Get-Date -Format 'yyyy-MM-dd'
-New-Item -ItemType Directory -Path "spec/archive/${TIMESTAMP}-{change-id}" -Force
+TIMESTAMP=$(date +%F)
+mkdir -p "spec/archive/${TIMESTAMP}-{change-id}"
 ```
 
 **示例**：
-```powershell
+```bash
 # 对 2025-10-26 归档的 "add-user-auth" 变更
-New-Item -ItemType Directory -Path 'spec/archive/2025-10-26-add-user-auth' -Force
+mkdir -p 'spec/archive/2025-10-26-add-user-auth'
 ```
 
 ### 第 4 步：合并 ADDED 需求到常驻规范
@@ -114,9 +113,9 @@ THEN 系统创建会话
 ```
 
 **目标**（`spec/specs/authentication/spec.md`）：
-```powershell
-# 追加到常驻规范（使用 here-string 并追加）
-@'
+```bash
+# 追加到常驻规范（使用 heredoc 并追加）
+cat >> 'spec/specs/authentication/spec.md' <<'EOF'
 ### Requirement: 用户登录
 WHEN 用户提交有效凭据,
 系统 SHALL 认证用户并创建会话。
@@ -125,7 +124,7 @@ WHEN 用户提交有效凭据,
 GIVEN 有效的凭据
 WHEN 用户提交登录表单
 THEN 系统创建会话
-'@ | Add-Content -Path 'spec/specs/authentication/spec.md'
+EOF
 ```
 
 ### 第 5 步：合并 MODIFIED 需求到常驻规范
@@ -139,21 +138,20 @@ THEN 系统创建会话
 
 **示例（使用 sed）**：
 
-```powershell
+```bash
 # 查找并替换需求块（概念示例；实际实现取决于结构）
-$path = 'spec/specs/authentication/spec.md'
-$content = Get-Content -Path $path
-$start = (Select-String -Path $path -Pattern '^### Requirement:\s*用户登录' -List).LineNumber
-$next = (Select-String -Path $path -Pattern '^### Requirement:' -List | Where-Object { $_.LineNumber -gt $start } | Select-Object -First 1).LineNumber
-if ($start) {
-  $end = if ($next) { $next - 1 } else { $content.Length }
-  $new = Get-Content -Path 'spec/changes/{change-id}/specs/authentication/spec-delta.md' # 取更新文本
-  $updated = @()
-  $updated += $content[0..($start-2)]
-  $updated += $new
-  if ($end -lt $content.Length) { $updated += $content[$end..($content.Length-1)] }
-  Set-Content -Path $path -Value $updated
-}
+path='spec/specs/authentication/spec.md'
+start=$(grep -n -E '^### Requirement:\s*用户登录' "$path" | head -1 | cut -d: -f1)
+if [ -n "$start" ]; then
+  next=$(grep -n '^### Requirement:' "$path" | awk -v s=$start -F: '$1>s{print $1; exit}')
+  end=${next:-$(wc -l < "$path")}
+  new_file='spec/changes/{change-id}/specs/authentication/spec-delta.md'
+  {
+    head -n $((start-1)) "$path"
+    cat "$new_file"
+    tail -n $(( $(wc -l < "$path") - end )) "$path"
+  } > "$path.tmp" && mv "$path.tmp" "$path"
+fi
 ```
 
 **手动方式**（出于安全建议）：
@@ -176,12 +174,12 @@ if ($start) {
 
 **示例**：
 
-```powershell
+```bash
 # 方案 1：带注释删除
 # 手动编辑 spec/specs/authentication/spec.md
 
 # 添加弃用注释
-Add-Content -Path 'spec/specs/authentication/spec.md' -Value ("<!-- Requirement 'Legacy Password Reset' removed {0} -->" -f (Get-Date -Format 'yyyy-MM-dd'))
+printf "<!-- Requirement 'Legacy Password Reset' removed %s -->\n" "$(date +%F)" >> 'spec/specs/authentication/spec.md'
 
 # 通过手动或脚本删除该需求块（参考上文替换示例）
 ```
@@ -196,36 +194,36 @@ Add-Content -Path 'spec/specs/authentication/spec.md' -Value ("<!-- Requirement 
 
 在所有差异合并后：
 
-```powershell
+```bash
 # 将完整的变更目录移动到归档
-Move-Item -Path "spec/changes/{change-id}" -Destination "spec/archive/${TIMESTAMP}-{change-id}"
+mv "spec/changes/{change-id}" "spec/archive/${TIMESTAMP}-{change-id}"
 ```
 
 **验证移动成功**：
-```powershell
+```bash
 # 检查归档是否存在
-Get-ChildItem -Path "spec/archive/${TIMESTAMP}-{change-id}" -Force
+ls -la "spec/archive/${TIMESTAMP}-{change-id}"
 
-# 检查 changes 目录是否干净
-Get-ChildItem -Path 'spec/changes' | Where-Object { $_.Name -match '{change-id}' } # 应无结果
+# 检查 changes 目录是否干净（应无匹配项）
+find 'spec/changes' -maxdepth 1 -mindepth 1 -type d -name '{change-id}'
 ```
 
 ### 第 8 步：验证常驻规范结构
 
 在合并后，验证常驻规范的完整性：
 
-```powershell
+```bash
 # 检查需求格式
-Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:'
+grep -R -n '### Requirement:' 'spec/specs' --include='spec.md'
 
 # 检查场景格式
-Select-String -Path 'spec/specs/**/*.md' -Pattern '#### Scenario:'
+grep -R -n '#### Scenario:' 'spec/specs' --include='spec.md'
 
 # 统计每个规范中的需求数量
-foreach ($spec in Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md') {
-  $count = (Select-String -Path $spec.FullName -Pattern '### Requirement:' -AllMatches).Count
-  Write-Output ("{0}: {1} requirements" -f $spec.FullName, $count)
-}
+find 'spec/specs' -type f -name 'spec.md' | while read -r spec; do
+  count=$(grep -c '### Requirement:' "$spec")
+  printf "%s: %d requirements\n" "$spec" "$count"
+done
 ```
 
 **手动审阅**：
@@ -276,7 +274,7 @@ foreach ($spec in Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md') {
 
 **务必**在移动到归档前验证差异合并：
 
-```powershell
+```bash
 # 合并后查看差异
 git diff spec/specs/
 
@@ -288,7 +286,7 @@ git add spec/specs/
 git commit -m "Merge spec deltas from add-user-auth"
 
 # 然后再归档
-Move-Item -Path 'spec/changes/add-user-auth' -Destination 'spec/archive/2025-10-26-add-user-auth'
+mv 'spec/changes/add-user-auth' 'spec/archive/2025-10-26-add-user-auth'
 ```
 
 ### 模式 2：原子化归档
@@ -296,15 +294,15 @@ Move-Item -Path 'spec/changes/add-user-auth' -Destination 'spec/archive/2025-10-
 归档整个变更，而非单个文件：
 
 **好**：
-```powershell
+```bash
 # 移动完整变更目录
-Move-Item -Path 'spec/changes/add-user-auth' -Destination 'spec/archive/2025-10-26-add-user-auth'
+mv 'spec/changes/add-user-auth' 'spec/archive/2025-10-26-add-user-auth'
 ```
 
 **坏**：
-```powershell
+```bash
 # 不要挑拣文件
-Move-Item -Path 'spec/changes/add-user-auth/proposal.md' -Destination 'spec/archive/'
+mv 'spec/changes/add-user-auth/proposal.md' 'spec/archive/'
 #（会留下孤儿文件）
 ```
 
@@ -321,7 +319,7 @@ Move-Item -Path 'spec/changes/add-user-auth/proposal.md' -Destination 'spec/arch
 
 推荐提交流程：
 
-```powershell
+```bash
 # 提交 1：合并差异
 git add spec/specs/
 git commit -m "Merge spec deltas from add-user-auth

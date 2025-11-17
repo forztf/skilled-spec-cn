@@ -13,46 +13,46 @@
 
 ### 检查变更目录是否存在
 
-```powershell
+```bash
 # 验证变更目录是否已创建
-if (Test-Path "spec/changes/{change-id}") { Write-Output "✓ 目录存在" } else { Write-Output "✗ 目录缺失" }
+test -d spec/changes/{change-id} && echo "✓ 目录存在" || echo "✗ 目录缺失"
 ```
 
 ### 列出所有变更
 
-```powershell
-# 显示所有进行中的变更（排除 archive）
-Get-ChildItem -Path 'spec/changes' | Where-Object { $_.Name -ne 'archive' } | Select-Object -ExpandProperty Name
+```bash
+# 显示所有进行中的变更
+ls -1 spec/changes/ | grep -v "archive"
 ```
 
 ### 检查是否有冲突
 
-```powershell
-# 搜索相似的变更 ID（忽略大小写）
-Get-ChildItem -Path 'spec/changes' | Where-Object { $_.Name -match ("(?i){search-term}") } | Select-Object -ExpandProperty Name
+```bash
+# 搜索相似的变更 ID
+ls spec/changes/ | grep -i "{search-term}"
 ```
 
 ## 提案文件验证
 
 ### 检查必需章节
 
-```powershell
+```bash
 # 验证 proposal.md 是否包含必需章节
-(Select-String -Path "spec/changes/{change-id}/proposal.md" -Pattern '^## Why' -AllMatches).Count
-(Select-String -Path "spec/changes/{change-id}/proposal.md" -Pattern '^## What Changes' -AllMatches).Count
-(Select-String -Path "spec/changes/{change-id}/proposal.md" -Pattern '^## Impact' -AllMatches).Count
+grep -c "## Why" spec/changes/{change-id}/proposal.md
+grep -c "## What Changes" spec/changes/{change-id}/proposal.md
+grep -c "## Impact" spec/changes/{change-id}/proposal.md
 ```
 
 **预期**：每个 grep 返回 1（如果有子章节则可能大于 1）
 
 ### 验证任务文件
 
-```powershell
+```bash
 # 统计编号任务数量
-(Select-String -Path "spec/changes/{change-id}/tasks.md" -Pattern '^\d+\.' -AllMatches).Count
+grep -c "^[0-9]\+\." spec/changes/{change-id}/tasks.md
 
 # 显示任务列表
-Select-String -Path "spec/changes/{change-id}/tasks.md" -Pattern '^\d+\.'
+grep "^[0-9]\+\." spec/changes/{change-id}/tasks.md
 ```
 
 **预期**：通常为 5-15 个任务
@@ -61,18 +61,18 @@ Select-String -Path "spec/changes/{change-id}/tasks.md" -Pattern '^\d+\.'
 
 ### 检查差异操作是否存在
 
-```powershell
+```bash
 # 统计差异操作标题数量
-(Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '## ADDED|MODIFIED|REMOVED' -AllMatches).Count
+grep -c "## ADDED\|MODIFIED\|REMOVED" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **预期**：至少 1 个匹配
 
 ### 列出差异操作
 
-```powershell
+```bash
 # 以行号显示所有差异操作
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '## ADDED|MODIFIED|REMOVED'
+grep -n "## ADDED\|MODIFIED\|REMOVED" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **示例输出**：
@@ -83,61 +83,53 @@ spec/changes/add-auth/specs/authentication/spec-delta.md:45:## MODIFIED Requirem
 
 ### 验证各部分是否有内容
 
-```powershell
-# 检查 ADDED 部分是否包含需求（粗略计数）
-$files = Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter '*.md'
-$count = 0
-foreach ($f in $files) {
-  $lines = Get-Content -Path $f.FullName
-  $inAdded = $false
-  foreach ($line in $lines) {
-    if ($line -match '^## ADDED') { $inAdded = $true; continue }
-    if ($inAdded -and $line -match '^## [A-Z]') { $inAdded = $false }
-    if ($inAdded -and $line -match '^### Requirement:') { $count++ }
-  }
-}
-Write-Output $count
+```bash
+# 检查 ADDED 部分是否包含需求
+awk '/## ADDED/,/^## [A-Z]/ {if (/### Requirement:/) count++} END {print count}' \
+    spec/changes/{change-id}/specs/**/*.md
 ```
 
 ## 需求格式验证
 
 ### 检查需求标题
 
-```powershell
+```bash
 # 列出所有需求标题
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '### Requirement:'
+grep -n "### Requirement:" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **期望格式**：`### Requirement: 描述性名称`
 
 ### 验证场景格式
 
-```powershell
+```bash
 # 检查场景（必须使用四个井号）
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '#### Scenario:'
+grep -n "#### Scenario:" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **期望格式**：`#### Scenario: 描述性名称`
 
 ### 统计需求与场景数量
 
-```powershell
-# 统计需求与场景数量，并输出比率
-$REQS = (Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '### Requirement:' -AllMatches).Count
-$SCENARIOS = (Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '#### Scenario:' -AllMatches).Count
-Write-Output ("Requirements: {0}" -f $REQS)
-Write-Output ("Scenarios: {0}" -f $SCENARIOS)
-$Ratio = if ($REQS -gt 0) { [math]::Round($SCENARIOS / $REQS, 1) } else { 0 }
-Write-Output ("Ratio: {0}" -f $Ratio)
+```bash
+# 统计需求数量
+REQS=$(grep -c "### Requirement:" spec/changes/{change-id}/specs/**/*.md)
+
+# 统计场景数量
+SCENARIOS=$(grep -c "#### Scenario:" spec/changes/{change-id}/specs/**/*.md)
+
+echo "Requirements: $REQS"
+echo "Scenarios: $SCENARIOS"
+echo "Ratio: $(echo "scale=1; $SCENARIOS/$REQS" | bc)"
 ```
 
 **预期**：比率 >= 2.0（每个需求至少 2 个场景）
 
 ### 检查 SHALL 关键字
 
-```powershell
+```bash
 # 验证需求中是否使用 SHALL（具约束性的要求指示）
-(Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '\bSHALL\b' -AllMatches).Count
+grep -c "SHALL" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **预期**：SHALL 的数量至少与需求数量相当
@@ -146,73 +138,88 @@ Write-Output ("Ratio: {0}" -f $Ratio)
 
 ### 预提交验证脚本
 
-```powershell
-# 验证变更提案结构（PowerShell 版本）
-param(
-  [Parameter(Mandatory=$true)]
-  [string]$CHANGE_ID
-)
-$BASE_PATH = "spec/changes/$CHANGE_ID"
+```bash
+#!/bin/bash
+# 验证变更提案结构
 
-Write-Output "Validating proposal: $CHANGE_ID"
-Write-Output "================================"
+CHANGE_ID="$1"
+BASE_PATH="spec/changes/$CHANGE_ID"
+
+echo "Validating proposal: $CHANGE_ID"
+echo "================================"
 
 # 1. 目录存在
-if (-not (Test-Path $BASE_PATH)) { Write-Output '✗ Change directory not found'; exit 1 }
-Write-Output '✓ Change directory exists'
+if [ ! -d "$BASE_PATH" ]; then
+    echo "✗ Change directory not found"
+    exit 1
+fi
+echo "✓ Change directory exists"
 
 # 2. 必需文件存在
-foreach ($file in 'proposal.md','tasks.md') {
-  if (-not (Test-Path (Join-Path $BASE_PATH $file))) { Write-Output ("✗ Missing {0}" -f $file); exit 1 }
-  Write-Output ("✓ Found {0}" -f $file)
-}
+for file in proposal.md tasks.md; do
+    if [ ! -f "$BASE_PATH/$file" ]; then
+        echo "✗ Missing $file"
+        exit 1
+    fi
+    echo "✓ Found $file"
+done
 
 # 3. 提案包含必需章节
-foreach ($section in '## Why','## What Changes','## Impact') {
-  if (-not (Select-String -Path (Join-Path $BASE_PATH 'proposal.md') -Pattern ([regex]::Escape($section)))) {
-    Write-Output ("✗ proposal.md missing section: {0}" -f $section); exit 1
-  }
-}
-Write-Output '✓ Proposal has required sections'
+for section in "## Why" "## What Changes" "## Impact"; do
+    if ! grep -q "$section" "$BASE_PATH/proposal.md"; then
+        echo "✗ proposal.md missing section: $section"
+        exit 1
+    fi
+done
+echo "✓ Proposal has required sections"
 
 # 4. 任务文件包含编号任务
-$TASK_COUNT = (Select-String -Path (Join-Path $BASE_PATH 'tasks.md') -Pattern '^\d+\.' -AllMatches).Count
-if ($TASK_COUNT -lt 3) { Write-Output ("✗ tasks.md has insufficient tasks ({0})" -f $TASK_COUNT); exit 1 }
-Write-Output ("✓ Found {0} tasks" -f $TASK_COUNT)
+TASK_COUNT=$(grep -c "^[0-9]\+\." "$BASE_PATH/tasks.md" || echo "0")
+if [ "$TASK_COUNT" -lt 3 ]; then
+    echo "✗ tasks.md has insufficient tasks ($TASK_COUNT)"
+    exit 1
+fi
+echo "✓ Found $TASK_COUNT tasks"
 
 # 5. 存在规范差异文件
-$DELTA_COUNT = (Get-ChildItem -Path (Join-Path $BASE_PATH 'specs') -Recurse -Filter '*.md' -ErrorAction SilentlyContinue | Measure-Object).Count
-if ($DELTA_COUNT -eq 0) { Write-Output '✗ No spec delta files found'; exit 1 }
-Write-Output ("✓ Found {0} spec delta file(s)" -f $DELTA_COUNT)
+DELTA_COUNT=$(find "$BASE_PATH/specs" -name "*.md" 2>/dev/null | wc -l)
+if [ "$DELTA_COUNT" -eq 0 ]; then
+    echo "✗ No spec delta files found"
+    exit 1
+fi
+echo "✓ Found $DELTA_COUNT spec delta file(s)"
 
 # 6. 存在差异操作
-$OPERATIONS = (Select-String -Path (Join-Path $BASE_PATH 'specs/**/*.md') -Pattern '## ADDED|MODIFIED|REMOVED' -AllMatches -ErrorAction SilentlyContinue).Count
-if ($OPERATIONS -eq 0) { Write-Output '✗ No delta operations found'; exit 1 }
-Write-Output ("✓ Found {0} delta operation(s)" -f $OPERATIONS)
+OPERATIONS=$(grep -h "## ADDED\|MODIFIED\|REMOVED" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
+if [ "$OPERATIONS" -eq 0 ]; then
+    echo "✗ No delta operations found"
+    exit 1
+fi
+echo "✓ Found $OPERATIONS delta operation(s)"
 
 # 7. 需求具备场景
-$REQ_COUNT = (Select-String -Path (Join-Path $BASE_PATH 'specs/**/*.md') -Pattern '### Requirement:' -AllMatches -ErrorAction SilentlyContinue).Count
-$SCENARIO_COUNT = (Select-String -Path (Join-Path $BASE_PATH 'specs/**/*.md') -Pattern '#### Scenario:' -AllMatches -ErrorAction SilentlyContinue).Count
-if ($REQ_COUNT -eq 0) { Write-Output '✗ No requirements found'; exit 1 }
-if ($SCENARIO_COUNT -lt $REQ_COUNT) {
-  Write-Output ("⚠ Warning: Fewer scenarios ({0}) than requirements ({1})" -f $SCENARIO_COUNT, $REQ_COUNT)
-  Write-Output '  Recommendation: At least 2 scenarios per requirement'
-} else {
-  Write-Output ("✓ Found {0} requirement(s) with {1} scenario(s)" -f $REQ_COUNT, $SCENARIO_COUNT)
-}
+REQ_COUNT=$(grep -h "### Requirement:" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
+SCENARIO_COUNT=$(grep -h "#### Scenario:" "$BASE_PATH/specs"/**/*.md 2>/dev/null | wc -l)
 
-Write-Output '================================'
-Write-Output '✓ Validation passed'
+if [ "$REQ_COUNT" -eq 0 ]; then
+    echo "✗ No requirements found"
+    exit 1
+fi
+
+if [ "$SCENARIO_COUNT" -lt "$REQ_COUNT" ]; then
+    echo "⚠ Warning: Fewer scenarios ($SCENARIO_COUNT) than requirements ($REQ_COUNT)"
+    echo "  Recommendation: At least 2 scenarios per requirement"
+else
+    echo "✓ Found $REQ_COUNT requirement(s) with $SCENARIO_COUNT scenario(s)"
+fi
+
+echo "================================"
+echo "✓ Validation passed"
 ```
 
 **用法**：
-```powershell
-# 运行 PowerShell 版本验证脚本示例
-.\n+```  
-
-```powershell
-# 用法示例：保存为 validate-proposal.ps1 后运行
-powershell -ExecutionPolicy Bypass -File .\validate-proposal.ps1 -CHANGE_ID add-user-auth
+```bash
+bash validate-proposal.sh add-user-auth
 ```
 
 ## 常见问题与修复
@@ -220,19 +227,10 @@ powershell -ExecutionPolicy Bypass -File .\validate-proposal.ps1 -CHANGE_ID add-
 ### 问题：缺少场景
 
 **检测**：
-```powershell
-# 查找没有场景的需求（简单近邻检查）
-foreach ($file in Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter 'spec.md') {
-  $content = Get-Content -Path $file.FullName
-  $matches = Select-String -Path $file.FullName -Pattern '^### Requirement:'
-  foreach ($m in $matches) {
-    $hasScenario = $false
-    for ($i = $m.LineNumber; $i -lt [Math]::Min($m.LineNumber + 50, $content.Length); $i++) {
-      if ($content[$i - 1] -match '^#### Scenario:') { $hasScenario = $true; break }
-    }
-    if (-not $hasScenario) { Write-Output $m.Line }
-  }
-}
+```bash
+# 查找没有场景的需求
+awk '/### Requirement:/ {req=$0; getline; if ($0 !~ /#### Scenario:/) print req}' \
+    spec/changes/{change-id}/specs/**/*.md
 ```
 
 **修复**：为每个需求添加场景
@@ -240,9 +238,9 @@ foreach ($file in Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse 
 ### 问题：场景标题层级错误
 
 **检测**：
-```powershell
+```bash
 # 查找场景标题井号数量错误（不完全等于 4）
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '^###\?\s+Scenario:|^#####\+\s+Scenario:'
+grep -n "^###\? Scenario:\|^#####+ Scenario:" spec/changes/{change-id}/specs/**/*.md
 ```
 
 **修复**：场景必须使用恰好 4 个井号：`#### Scenario:`
@@ -250,13 +248,14 @@ Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '^###\?\s+
 ### 问题：缺少差异操作
 
 **检测**：
-```powershell
+```bash
 # 检查文件存在需求但无差异操作头
-foreach ($file in Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter '*.md') {
-  $hasReq = Select-String -Path $file.FullName -Pattern '### Requirement:'
-  $hasOp = Select-String -Path $file.FullName -Pattern '## ADDED|MODIFIED|REMOVED'
-  if ($hasReq -and -not $hasOp) { Write-Output ("Missing delta operation in: {0}" -f $file.FullName) }
-}
+for file in spec/changes/{change-id}/specs/**/*.md; do
+    if grep -q "### Requirement:" "$file" && \
+       ! grep -q "## ADDED\|MODIFIED\|REMOVED" "$file"; then
+        echo "Missing delta operation in: $file"
+    fi
+done
 ```
 
 **修复**：添加适当的差异操作标题（ADDED/MODIFIED/REMOVED）
@@ -265,30 +264,27 @@ foreach ($file in Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse 
 
 ### 一行命令：完整结构检查
 
-```powershell
+```bash
 # 快速验证变更结构
-$CHANGE_ID = 'add-user-auth'
-if (Test-Path "spec/changes/$CHANGE_ID/proposal.md" -and \
-    Test-Path "spec/changes/$CHANGE_ID/tasks.md" -and \
-    (Select-String -Path "spec/changes/$CHANGE_ID/specs/**/*.md" -Pattern '## ADDED|MODIFIED|REMOVED') -and \
-    (Select-String -Path "spec/changes/$CHANGE_ID/specs/**/*.md" -Pattern '### Requirement:') -and \
-    (Select-String -Path "spec/changes/$CHANGE_ID/specs/**/*.md" -Pattern '#### Scenario:')) {
-  Write-Output '✓ All validations passed'
-} else {
-  Write-Output '✗ Validation failed'
-}
+CHANGE_ID="add-user-auth" && \
+test -f spec/changes/$CHANGE_ID/proposal.md && \
+test -f spec/changes/$CHANGE_ID/tasks.md && \
+grep -q "## ADDED\|MODIFIED\|REMOVED" spec/changes/$CHANGE_ID/specs/**/*.md && \
+grep -q "### Requirement:" spec/changes/$CHANGE_ID/specs/**/*.md && \
+grep -q "#### Scenario:" spec/changes/$CHANGE_ID/specs/**/*.md && \
+echo "✓ All validations passed" || echo "✗ Validation failed"
 ```
 
 ### 显示提案摘要
 
-```powershell
+```bash
 # 展示提案概览
-$CHANGE_ID = 'add-user-auth'
-Write-Output ("Proposal: {0}" -f $CHANGE_ID)
-Write-Output ("Files: {0}" -f ((Get-ChildItem -Path "spec/changes/$CHANGE_ID" -Recurse -File).Count))
-Write-Output ("Tasks: {0}" -f ((Select-String -Path "spec/changes/$CHANGE_ID/tasks.md" -Pattern '^\d+\.' -AllMatches).Count))
-Write-Output ("Requirements: {0}" -f ((Select-String -Path "spec/changes/$CHANGE_ID/specs/**/*.md" -Pattern '### Requirement:' -AllMatches).Count))
-Write-Output ("Scenarios: {0}" -f ((Select-String -Path "spec/changes/$CHANGE_ID/specs/**/*.md" -Pattern '#### Scenario:' -AllMatches).Count))
+CHANGE_ID="add-user-auth"
+echo "Proposal: $CHANGE_ID"
+echo "Files: $(find spec/changes/$CHANGE_ID -type f | wc -l)"
+echo "Tasks: $(grep -c "^[0-9]\+\." spec/changes/$CHANGE_ID/tasks.md)"
+echo "Requirements: $(grep -h "### Requirement:" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
+echo "Scenarios: $(grep -h "#### Scenario:" spec/changes/$CHANGE_ID/specs/**/*.md | wc -l)"
 ```
 
 ## 验证清单
@@ -315,7 +311,7 @@ Write-Output ("Scenarios: {0}" -f ((Select-String -Path "spec/changes/$CHANGE_ID
 ```
 
 运行所有自动检查：
-```powershell
-# 执行 PowerShell 版本验证脚本
-powershell -ExecutionPolicy Bypass -File .\validate-proposal.ps1 -CHANGE_ID {change-id}
+```bash
+# 执行验证脚本
+bash validate-proposal.sh {change-id}
 ```

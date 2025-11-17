@@ -24,17 +24,17 @@ description: 加载项目上下文，列出现有规范与变更，搜索能力�
 
 ### 列出所有规范
 
-```powershell
+```bash
 # 查找所有规范文件
-Get-ChildItem -Path 'spec/specs' -Filter 'spec.md' -File -Recurse
+find spec/specs -type f -name 'spec.md'
 
 # 查找所有能力目录（仅一级目录）
-Get-ChildItem -Path 'spec/specs' -Directory
+find spec/specs -maxdepth 1 -mindepth 1 -type d
 
 # 显示规范树（Windows 内置 tree；或使用递归列出）
 tree spec/specs
 # 或
-Get-ChildItem -Path 'spec/specs' -Recurse
+find spec/specs -print
 ```
 
 **输出格式**：
@@ -50,99 +50,91 @@ spec/specs/
 
 ### 列出进行中的变更
 
-```powershell
+```bash
 # 显示所有进行中的变更（排除 archive 并按名称排序）
-Get-ChildItem -Path 'spec/changes' -Directory |
-  Where-Object { $_.Name -ne 'archive' } |
-  Sort-Object Name
+find spec/changes -maxdepth 1 -mindepth 1 -type d ! -name 'archive' | sort
 
 # 显示每个变更目录的修改时间
-Get-ChildItem -Path 'spec/changes' -Directory |
-  Where-Object { $_.Name -ne 'archive' } |
-  Select-Object Name, LastWriteTime
+for d in spec/changes/*; do
+  [ -d "$d" ] && [ "$(basename "$d")" != "archive" ] && printf "%s\t%s\n" "$(basename "$d")" "$(stat -c '%y' "$d")";
+done
 
 # 统计进行中的变更数量
-(Get-ChildItem -Path 'spec/changes' -Directory |
-  Where-Object { $_.Name -ne 'archive' }).Count
+find spec/changes -maxdepth 1 -mindepth 1 -type d ! -name 'archive' | wc -l
 ```
 
 ### 列出已归档的变更
 
-```powershell
+```bash
 # 显示所有已归档变更（仅名称）
-Get-ChildItem -Path 'spec/archive' | Select-Object -ExpandProperty Name
+find spec/archive -maxdepth 1 -mindepth 1 -printf '%f\n'
 
 # 显示详细信息（包含时间与权限）
-Get-ChildItem -Path 'spec/archive' -Force | Format-Table Mode, LastWriteTime, Length, Name
+stat -c "%A %y %s %n" spec/archive/*
 
 # 查找最近 7 天归档的变更（按目录时间过滤）
-Get-ChildItem -Path 'spec/archive' -Directory |
-  Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-7) }
+find spec/archive -maxdepth 1 -mindepth 1 -type d -mtime -7 -printf '%f\n'
 ```
 
 ### 搜索需求
 
-```powershell
+```bash
 # 查找所有需求（递归匹配 .md 文件）
-Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:'
+grep -R -n '^### Requirement:' spec/specs --include='*.md'
 
 # 在特定能力中查找需求
-Select-String -Path 'spec/specs/authentication/spec.md' -Pattern '### Requirement:'
+grep -n '^### Requirement:' spec/specs/authentication/spec.md
 
 # 列出唯一需求名称（抽取标题文本并去重）
-Select-String -Path 'spec/specs/**/*.md' -Pattern '^### Requirement:\s*(.+)$' |
-  ForEach-Object { $_.Matches[0].Groups[1].Value } |
-  Sort-Object -Unique
+grep -R -E '^### Requirement:\s*(.+)$' spec/specs --include='*.md' | sed -E 's/.*### Requirement:\s*(.+)$/\1/' | sort -u
 ```
 
 ### 搜索场景
 
-```powershell
+```bash
 # 查找所有场景（递归匹配）
-Select-String -Path 'spec/specs/**/*.md' -Pattern '#### Scenario:'
+grep -R -n '^#### Scenario:' spec/specs --include='*.md'
 
 # 统计每个规范中的场景数量
-$specs = Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md'
-foreach ($s in $specs) {
-  $count = (Select-String -Path $s.FullName -Pattern '#### Scenario:' -AllMatches).Count
-  Write-Output "$($s.FullName): $count 个场景"
-}
+for s in $(find spec/specs -type f -name 'spec.md'); do
+  count=$(grep -c '^#### Scenario:' "$s")
+  echo "$s: $count 个场景"
+done
 ```
 
 ### 关键词搜索
 
-```powershell
+```bash
 # 查找提到 "authentication" 的规范（不区分大小写）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'authentication' -CaseSensitive:$false
+grep -R -i 'authentication' spec/specs --include='*.md'
 
 # 查找与 "password" 相关的需求（展示上下文并过滤出需求段）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'password' -CaseSensitive:$false -Context 1,5 |
-  ForEach-Object { $_.Context.PreContext + $_.Line + $_.Context.PostContext } |
-  Where-Object { $_ -match '### Requirement:' }
+grep -R -i -n -C 5 'password' spec/specs --include='*.md' | grep '### Requirement:'
 
 # 查找提到 "error" 的场景（展示上下文）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'error' -CaseSensitive:$false -Context 1,10 |
-  ForEach-Object { $_.Context.PreContext + $_.Line + $_.Context.PostContext } |
-  Where-Object { $_ -match '#### Scenario:' }
+grep -R -i -n -C 10 'error' spec/specs --include='*.md' | grep '#### Scenario:'
 ```
 
 ## 常见查询
 
 ### 查询 1：「项目有哪些规范？」
 
-```powershell
+```bash
 # 列出所有能力（仅一级目录名）
-Get-ChildItem -Path 'spec/specs' -Directory | Select-Object -ExpandProperty Name
+find spec/specs -maxdepth 1 -mindepth 1 -type d -printf '%f\n'
 
 # 统计每个能力的需求数量
-foreach ($cap in Get-ChildItem -Path 'spec/specs' -Directory) {
-  $name = $cap.Name
-  $specPath = Join-Path $cap.FullName 'spec.md'
-  if (Test-Path $specPath) {
-    $count = (Select-String -Path $specPath -Pattern '### Requirement:' -AllMatches).Count
-  } else { $count = 0 }
-  Write-Output "$name: $count 条需求"
-}
+for cap in spec/specs/*; do
+  [ -d "$cap" ] || continue
+  name=$(basename "$cap")
+  specPath="$cap/spec.md"
+  if [ -f "$specPath" ]; then
+    count=$(grep -c '^### Requirement:' "$specPath")
+  else
+    count=0
+  fi
+  echo "$name: $count 条需求"
+done
 ```
 
 **响应格式**：
@@ -160,14 +152,13 @@ foreach ($cap in Get-ChildItem -Path 'spec/specs' -Directory) {
 
 ### 查询 2：「当前有哪些变更在进行？」
 
-```powershell
+```bash
 # 附带提案摘要的列表（仅前 20 行，并展示 Why 段）
-foreach ($change in (Get-ChildItem -Path 'spec/changes' -Directory | Where-Object { $_.Name -ne 'archive' })) {
-  $id = $change.Name
-  Write-Output "=== $id ==="
-  Get-Content -Path (Join-Path $change.FullName 'proposal.md') -TotalCount 20 |
-    Select-String -Pattern '## Why' -Context 0,3
-}
+for change in $(find 'spec/changes' -maxdepth 1 -mindepth 1 -type d ! -name 'archive'); do
+  id=$(basename "$change")
+  echo "=== $id ==="
+  head -n 20 "$change/proposal.md" | grep -n '## Why' -A 3
+done
 ```
 
 **响应格式**：
@@ -187,17 +178,17 @@ foreach ($change in (Get-ChildItem -Path 'spec/changes' -Directory | Where-Objec
 
 ### 查询 3：「查找 authentication 规范」
 
-```powershell
+```bash
 # 阅读完整规范
-Get-Content -Path 'spec/specs/authentication/spec.md'
+cat 'spec/specs/authentication/spec.md'
 
 # 或展示摘要
-Write-Output '需求：'
-Select-String -Path 'spec/specs/authentication/spec.md' -Pattern '### Requirement:'
+echo '需求：'
+grep -n '### Requirement:' 'spec/specs/authentication/spec.md'
 
-Write-Output ''
-Write-Output '场景：'
-Select-String -Path 'spec/specs/authentication/spec.md' -Pattern '#### Scenario:'
+echo ''
+echo '场景：'
+grep -n '#### Scenario:' 'spec/specs/authentication/spec.md'
 ```
 
 **响应格式**：
@@ -214,14 +205,12 @@ Select-String -Path 'spec/specs/authentication/spec.md' -Pattern '#### Scenario:
 
 ### 查询 4：「查找与 password 相关的规范」
 
-```powershell
+```bash
 # 关键词搜索（附带后文 5 行）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'password' -CaseSensitive:$false -Context 0,5
+grep -R -i -n -A 5 'password' spec/specs --include='*.md'
 
 # 显示提到该关键词的规范（唯一文件列表）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'password' -CaseSensitive:$false |
-  Select-Object -ExpandProperty Path |
-  Sort-Object -Unique
+grep -R -i -l 'password' spec/specs --include='*.md' | sort -u
 ```
 
 **响应格式**：
@@ -240,76 +229,77 @@ Select-String -Path 'spec/specs/**/*.md' -Pattern 'password' -CaseSensitive:$fal
 
 ### 查询 5：「变更 X 的具体内容是什么？」
 
-```powershell
+```bash
 # 展示完整的变更上下文
-$CHANGE_ID = 'add-user-auth'
+CHANGE_ID='add-user-auth'
 
-Write-Output '=== 提案 ==='
-Get-Content -Path ("spec/changes/$CHANGE_ID/proposal.md")
+echo '=== 提案 ==='
+cat "spec/changes/$CHANGE_ID/proposal.md"
 
-Write-Output ''
-Write-Output '=== 任务 ==='
-Get-Content -Path ("spec/changes/$CHANGE_ID/tasks.md")
+echo ''
+echo '=== 任务 ==='
+cat "spec/changes/$CHANGE_ID/tasks.md"
 
-Write-Output ''
-Write-Output '=== 规范差异 ==='
-Get-ChildItem -Path ("spec/changes/$CHANGE_ID/specs") -Recurse -Filter '*.md' |
-  ForEach-Object {
-    Write-Output ("文件：{0}" -f $_.FullName)
-    Get-Content -Path $_.FullName
-  }
+echo ''
+echo '=== 规范差异 ==='
+find "spec/changes/$CHANGE_ID/specs" -type f -name '*.md' | while read -r f; do
+  echo "文件：$f"
+  cat "$f"
+done
 ```
 
 ## 仪表盘视图
 
 创建全面的项目概览：
 
-```powershell
-# 项目规范仪表盘（在 PowerShell 中运行）
+```bash
+# 项目规范仪表盘（在 bash 中运行）
 
-Write-Output '===  规范仪表盘 ==='
-Write-Output ''
+echo '===  规范仪表盘 ==='
+echo ''
 
 # 能力
-Write-Output '## 能力'
-$CAPS = (Get-ChildItem -Path 'spec/specs' -Directory).Count
-Write-Output ("能力总数：{0}" -f $CAPS)
-foreach ($cap in Get-ChildItem -Path 'spec/specs' -Directory) {
-  $name = $cap.Name
-  $specPath = Join-Path $cap.FullName 'spec.md'
-  $reqs = (Test-Path $specPath) ? (Select-String -Path $specPath -Pattern '### Requirement:' -AllMatches).Count : 0
-  Write-Output ("  - {0}: {1} 条需求" -f $name, $reqs)
-}
-Write-Output ''
+echo '## 能力'
+CAPS=$(find 'spec/specs' -maxdepth 1 -mindepth 1 -type d | wc -l)
+echo "能力总数：$CAPS"
+for cap in spec/specs/*; do
+  [ -d "$cap" ] || continue
+  name=$(basename "$cap")
+  specPath="$cap/spec.md"
+  if [ -f "$specPath" ]; then
+    reqs=$(grep -c '### Requirement:' "$specPath")
+  else
+    reqs=0
+  fi
+  echo "  - $name: $reqs 条需求"
+done
+echo ''
 
 # 需求
-Write-Output '## 需求'
-$TOTAL_REQS = (Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:' -AllMatches).Count
-$TOTAL_SCENARIOS = (Select-String -Path 'spec/specs/**/*.md' -Pattern '#### Scenario:' -AllMatches).Count
-Write-Output ("需求总数：{0}" -f $TOTAL_REQS)
-Write-Output ("场景总数：{0}" -f $TOTAL_SCENARIOS)
-$avg = if ($TOTAL_REQS -gt 0) { [math]::Round($TOTAL_SCENARIOS / $TOTAL_REQS, 1) } else { 0 }
-Write-Output ("每条需求平均场景数：{0}" -f $avg)
-Write-Output ''
+echo '## 需求'
+TOTAL_REQS=$(grep -R -E '### Requirement:' spec/specs --include='*.md' | wc -l)
+TOTAL_SCENARIOS=$(grep -R -E '#### Scenario:' spec/specs --include='*.md' | wc -l)
+echo "需求总数：$TOTAL_REQS"
+echo "场景总数：$TOTAL_SCENARIOS"
+if [ "$TOTAL_REQS" -gt 0 ]; then avg=$(awk -v s=$TOTAL_SCENARIOS -v r=$TOTAL_REQS 'BEGIN{printf "%.1f", s/r}'); else avg=0; fi
+echo "每条需求平均场景数：$avg"
+echo ''
 
 # 变更
-Write-Output '## 变更'
-$ACTIVE = (Get-ChildItem -Path 'spec/changes' -Directory | Where-Object { $_.Name -ne 'archive' }).Count
-$ARCHIVED = (Get-ChildItem -Path 'spec/archive' | Measure-Object).Count
-Write-Output ("进行中变更：{0}" -f $ACTIVE)
-Write-Output ("已归档变更：{0}" -f $ARCHIVED)
-Write-Output ''
+echo '## 变更'
+ACTIVE=$(find 'spec/changes' -maxdepth 1 -mindepth 1 -type d ! -name 'archive' | wc -l)
+ARCHIVED=$(find 'spec/archive' -maxdepth 1 -mindepth 1 | wc -l)
+echo "进行中变更：$ACTIVE"
+echo "已归档变更：$ARCHIVED"
+echo ''
 
 # 最近活动
-Write-Output '## 最近活动'
-Write-Output '最近修改的规范：'
-Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md' |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 5 |
-  ForEach-Object {
-    $days = [int]((Get-Date) - $_.LastWriteTime).TotalDays
-    Write-Output ("- {0}（{1} 天前）" -f $_.FullName, $days)
-  }
+echo '## 最近活动'
+echo '最近修改的规范：'
+find 'spec/specs' -type f -name 'spec.md' -printf '%T@ %p\n' | sort -nr | head -5 | awk '{print $2}' | while read -r f; do
+  days=$(( ( $(date +%s) - $(stat -c %Y "$f") ) / 86400 ))
+  echo "- $f（$days 天前）"
+done
 ```
 
 **响应格式**：
@@ -337,48 +327,40 @@ Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md' |
 
 ### 查找相关需求
 
-```powershell
+```bash
 # 查找提到其他需求的内容（展示上下文并过滤出需求行）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'User Login' -Context 0,10 |
-  ForEach-Object { $_.Context.PreContext + $_.Line + $_.Context.PostContext } |
-  Where-Object { $_ -match '### Requirement:' }
+grep -R -n -C 10 'User Login' spec/specs --include='*.md' | grep '### Requirement:'
 
 # 查找交叉引用（包含 "See Requirement:")
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'See Requirement:'
+grep -R -n 'See Requirement:' spec/specs --include='*.md'
 ```
 
 ### 分析覆盖度
 
-```powershell
+```bash
 # 查找无场景的需求（近邻 50 行范围内无场景）
-foreach ($file in Get-ChildItem -Path 'spec/specs' -Recurse -Filter 'spec.md') {
-  $content = Get-Content -Path $file.FullName
-  $matches = Select-String -Path $file.FullName -Pattern '### Requirement:'
-  foreach ($m in $matches) {
-    $hasScenario = $false
-    for ($i = $m.LineNumber; $i -lt [Math]::Min($m.LineNumber + 50, $content.Length); $i++) {
-      if ($content[$i - 1] -match '#### Scenario:') { $hasScenario = $true; break }
-    }
-    if (-not $hasScenario) { Write-Output $m.Line }
-  }
-}
+find 'spec/specs' -type f -name 'spec.md' | while read -r f; do
+  awk '
+    /^### Requirement:/ { req_line=NR; has=0 }
+    (NR>req_line && NR<=req_line+50 && /#### Scenario:/) { has=1 }
+    (NR>req_line+50 && req_line) { if(!has) print f":"req_line; req_line=0; has=0 }
+    END { if(req_line && !has) print req_line }
+  ' f="$f" "$f"
+done
 
 # 查找不包含完整 Given/When/Then 的场景（上下文 5 行检查）
-Select-String -Path 'spec/specs/**/*.md' -Pattern '#### Scenario:' -Context 0,5 |
-  Where-Object { ($_.Context.PreContext + $_.Line + $_.Context.PostContext) -join "`n" -notmatch 'GIVEN|WHEN|THEN' }
+grep -R -n -C 5 '#### Scenario:' spec/specs --include='*.md' | awk 'BEGIN{RS="\n--\n"} { block=$0; if (block !~ /GIVEN/ || block !~ /WHEN/ || block !~ /THEN/) print block }'
 ```
 
 ### 对比进行中与已归档
 
-```powershell
+```bash
 # 展示时间演化
-Write-Output '归档历史：'
-Get-ChildItem -Path 'spec/archive' | Select-Object -ExpandProperty Name | Select-Object -First 10
+echo '归档历史：'
+ls -1 spec/archive | head -10
 
-Write-Output '最近归档（过去 30 天）：'
-Get-ChildItem -Path 'spec/archive' -Directory |
-  Where-Object { $_.LastWriteTime -gt (Get-Date).AddDays(-30) } |
-  Select-Object -ExpandProperty Name
+echo '最近归档（过去 30 天）：'
+find 'spec/archive' -maxdepth 1 -mindepth 1 -type d -mtime -30 -printf '%f\n'
 ```
 
 ## 搜索模式
@@ -387,48 +369,54 @@ Get-ChildItem -Path 'spec/archive' -Directory |
 
 用户提问：「系统能做什么？」
 
-```powershell
+```bash
 # 列出能力（仅一级目录名）
-Get-ChildItem -Path 'spec/specs' -Directory | Select-Object -ExpandProperty Name
+find 'spec/specs' -maxdepth 1 -mindepth 1 -type d -printf '%f\n'
 
 # 展示高层需求（每个能力取前三条）
-foreach ($cap in Get-ChildItem -Path 'spec/specs' -Directory) {
-  Write-Output ("=== {0} ===" -f $cap.Name)
-  Select-String -Path (Join-Path $cap.FullName 'spec.md') -Pattern '### Requirement:' |
-    Select-Object -First 3
-}
+for cap in spec/specs/*; do
+  [ -d "$cap" ] || continue
+  echo "=== $(basename "$cap") ==="
+  grep -n '### Requirement:' "$cap/spec.md" | head -3
+done
 ```
 
 ### 模式 2：功能搜索
 
 用户提问：「有密码重置的规范吗？」
 
-```powershell
+```bash
 # 关键词搜索（上下文：前 1 行，后 10 行）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'password reset' -CaseSensitive:$false -Context 1,10
+grep -R -i -n -C 10 'password reset' spec/specs --include='*.md'
 
 # 若找到，展示完整需求（根据标题匹配，附加上下文）
-Select-String -Path 'spec/specs/**/*.md' -Pattern 'Requirement:.*Password Reset' -CaseSensitive:$false -Context 1,20
+grep -R -i -n -C 20 'Requirement:.*Password Reset' spec/specs --include='*.md'
 ```
 
 ### 模式 3：变更跟踪
 
 用户提问：「现在做什么？」
 
-```powershell
+```bash
 # 附带状态展示进行中的变更
-foreach ($change in Get-ChildItem -Path 'spec/changes' -Directory | Where-Object { $_.Name -ne 'archive' }) {
-  $id = $change.Name
-  Write-Output ("{0}:" -f $id)
-  if (Test-Path (Join-Path $change.FullName 'IMPLEMENTED')) {
-    Write-Output '  状态：已实施'
-  } else {
-    Write-Output '  状态：进行中'
-  }
-  $taskFile = Join-Path $change.FullName 'tasks.md'
-  $taskCount = (Test-Path $taskFile) ? (Select-String -Path $taskFile -Pattern '^\d+\.' -AllMatches).Count : 0
-  Write-Output ("  任务数：{0}" -f $taskCount)
-}
+for change in spec/changes/*; do
+  [ -d "$change" ] || continue
+  [ "$(basename "$change")" = 'archive' ] && continue
+  id=$(basename "$change")
+  echo "$id:"
+  if [ -f "$change/IMPLEMENTED" ]; then
+    echo '  状态：已实施'
+  else
+    echo '  状态：进行中'
+  fi
+  taskFile="$change/tasks.md"
+  if [ -f "$taskFile" ]; then
+    taskCount=$(grep -c -E '^\\d+\.' "$taskFile")
+  else
+    taskCount=0
+  fi
+  echo "  任务数：$taskCount"
+done
 ```
 
 ## 最佳实践
@@ -446,13 +434,12 @@ foreach ($change in Get-ChildItem -Path 'spec/changes' -Directory | Where-Object
 
 ### 模式 2：高效使用 grep
 
-```powershell
+```bash
 # 结合过滤器提高精度（先匹配需求，再按行过滤包含 auth）
-Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:' |
-  Where-Object { $_.Line -match '(?i)auth' }
+grep -R -n '### Requirement:' spec/specs --include='*.md' | grep -i 'auth'
 
 # 使用上下文标志提升可读性（前 2 行，后 10 行）
-Select-String -Path 'spec/specs/authentication/spec.md' -Pattern '#### Scenario:' -Context 2,10
+grep -n -C 10 '#### Scenario:' spec/specs/authentication/spec.md
 ```
 
 ### 模式 3：聚合信息

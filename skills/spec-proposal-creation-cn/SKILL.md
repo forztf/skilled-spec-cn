@@ -36,15 +36,15 @@ description: 通过规范驱动的方法创建结构化的变更提案与规范�
 
 在创建提案前，了解当前状态：
 
-```powershell
+```bash
 # 列出所有现有规范
-Get-ChildItem -Path 'spec/specs' -Filter 'spec.md' -File -Recurse
+find 'spec/specs' -type f -name 'spec.md'
 
 # 列出进行中的变更以避免冲突
-Get-ChildItem -Path 'spec/changes' -Directory | Where-Object { $_.Name -ne 'archive' }
+find 'spec/changes' -maxdepth 1 -mindepth 1 -type d ! -name 'archive'
 
 # 搜索相关需求
-Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:'
+grep -R -n '^### Requirement:' spec/specs --include='*.md'
 ```
 
 ### 第 2 步：生成唯一的变更 ID
@@ -60,24 +60,24 @@ Select-String -Path 'spec/specs/**/*.md' -Pattern '### Requirement:'
 - `remove-legacy-endpoints`
 
 **校验**：检查是否冲突：
-```powershell
+```bash
 # 检查是否存在冲突的变更 ID（忽略大小写）
-Get-ChildItem -Path 'spec/changes' | Where-Object { $_.Name -match '(?i)<proposed-id>' }
+find 'spec/changes' -maxdepth 1 -mindepth 1 -type d | sed -E 's#.*/##' | grep -i '<proposed-id>'
 ```
 
 ### 第 3 步：生成目录结构
 
 按标准结构创建变更目录：
 
-```powershell
+```bash
 # 将 {change-id} 替换为实际 ID
-New-Item -ItemType Directory -Path "spec/changes/{change-id}/specs/{capability-name}" -Force
+mkdir -p "spec/changes/{change-id}/specs/{capability-name}"
 ```
 
 **示例**：
-```powershell
+```bash
 # 示例：创建变更目录
-New-Item -ItemType Directory -Path 'spec/changes/add-user-auth/specs/authentication' -Force
+mkdir -p 'spec/changes/add-user-auth/specs/authentication'
 ```
 
 ### 第 4 步：起草 proposal.md
@@ -154,15 +154,15 @@ AND 重定向至仪表盘
 ```
 
 **自动化检查**：
-```powershell
+```bash
 # 统计差异操作（应 > 0）
-(Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '## ADDED|MODIFIED|REMOVED' -AllMatches).Count
+grep -R -E '## ADDED|MODIFIED|REMOVED' "spec/changes/{change-id}/specs" --include='*.md' | wc -l
 
 # 验证场景格式（显示行号）
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '#### Scenario:'
+grep -R -n '#### Scenario:' "spec/changes/{change-id}/specs" --include='*.md'
 
 # 检查需求标题
-Select-String -Path "spec/changes/{change-id}/specs/**/*.md" -Pattern '### Requirement:'
+grep -R -n '### Requirement:' "spec/changes/{change-id}/specs" --include='*.md'
 ```
 
 ### 第 8 步：提交用户评审

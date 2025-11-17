@@ -35,16 +35,15 @@ description: 以测试与验证为先的方式，按序执行并实现已批准�
 
 开始之前，读取全部上下文：
 
-```powershell
+```bash
 # 读取提案
-Get-Content -Path "spec/changes/{change-id}/proposal.md"
+cat "spec/changes/{change-id}/proposal.md"
 
 # 读取所有任务
-Get-Content -Path "spec/changes/{change-id}/tasks.md"
+cat "spec/changes/{change-id}/tasks.md"
 
 # 读取规范差异以理解需求
-Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter "*.md" |
-  ForEach-Object { Get-Content -Path $_.FullName }
+find "spec/changes/{change-id}/specs" -type f -name "*.md" -print0 | xargs -0 -I{} cat "{}"
 ```
 
 **理解**：
@@ -115,7 +114,7 @@ Get-ChildItem -Path "spec/changes/{change-id}/specs" -Recurse -Filter "*.md" |
 每个任务完成后进行验证：
 
 **代码相关任务**：
-```powershell
+```bash
 # 运行相关测试
 npm test # 或 pytest、cargo test 等
 
@@ -129,7 +128,7 @@ npm run type-check
 要使用 MCP servers 中的 chrome-devtools 或 playwright 进行调试和测试。
 
 **数据库相关任务**：
-```powershell
+```bash
 # 验证迁移执行
 npm run db:migrate
 
@@ -138,9 +137,9 @@ npm run db:schema
 ```
 
 **API 相关任务**：
-```powershell
-# 手动测试端点（使用 Invoke-RestMethod，便于在 PowerShell 下运行）
-Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/api/endpoint' -ContentType 'application/json' -Body '{"test":"data"}'
+```bash
+# 手动测试端点（使用 curl）
+curl -X POST -H 'Content-Type: application/json' -d '{"test":"data"}' 'http://localhost:3000/api/endpoint'
 
 # 或运行集成测试
 npm run test:integration
@@ -162,9 +161,9 @@ npm run test:integration
 
 在所有任务完成后：
 
-```powershell
+```bash
 # 创建完成标记（写入时间戳）
-Set-Content -Path "spec/changes/{change-id}/IMPLEMENTED" -Value ("实现提案: {0}" -f (Get-Date))
+printf "实现提案: %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" > "spec/changes/{change-id}/IMPLEMENTED"
 ```
 
 **告知用户**：
@@ -202,7 +201,7 @@ Set-Content -Path "spec/changes/{change-id}/IMPLEMENTED" -Value ("实现提案: 
 
 若任务存在依赖，先验证先决条件：
 
-```powershell
+```bash
 # 示例：数据库迁移必须在 API 代码之前
 # 检查迁移状态
 npm run db:status
