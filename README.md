@@ -21,7 +21,7 @@ Claude：[spec-proposal-creation-cn 激活]
         ✓ spec/changes/add-user-auth/tasks.md
         ✓ spec/changes/add-user-auth/specs/authentication/spec-delta.md
 
-        审阅后准备好即可回复「implement it」。
+        审阅后准备好即可回复「实现提案」。
 ```
 
 ## 工作流
