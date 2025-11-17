@@ -1,0 +1,42 @@
+{
+  "name": "skilled-spec-cn",
+  "version": "1.0.1",
+  "description": "面向规范的开发，适用于 Claude Code —— 使用自然语言技能进行结构化需求与测试驱动的实现",
+  "keywords": [
+    "claude-code",
+    "spec-driven",
+    "requirements",
+    "EARS",
+    "testing",
+    "TDD",
+    "openspec",
+    "cli"
+  ],
+  "bin": {
+    "skilled-spec-cn": "./bin/install.js"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    ".claude-plugin/",
+    "CLAUDE.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node bin/install.js --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/forztf/skilled-spec-cn.git"
+  },
+  "author": "Skilled Spec Contributors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/forztf/skilled-spec-cn/issues"
+  },
+  "homepage": "https://github.com/forztf/skilled-spec-cn#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
