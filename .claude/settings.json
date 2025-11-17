@@ -9,5 +9,10 @@
   },
   "enabledPlugins": {
     "skilled-spec-cn@skilled-spec-cn-local": true
+  },
+  "permissions": {
+    "allow": [],
+    "deny": [],
+    "ask": []
   }
 }

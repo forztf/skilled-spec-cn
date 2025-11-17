@@ -131,10 +131,10 @@ Claude 将规范差异合并到常驻文档，并创建带时间戳的归档。
 
 | 技能 | 触发词 | 目的 |
 |------|--------|------|
-| **spec-proposal-creation-cn** | "create proposal"、"plan feature" | 生成带 EARS 需求的结构化提案 |
-| **spec-implementation-cn** | "implement"、"build" | 以测试与进度跟踪的方式执行任务 |
-| **spec-archiving-cn** | "archive"、"merge specs" | 合并规范差异并创建归档 |
-| **spec-context-loading-cn** | "what specs exist"、"show changes" | 发现规范、搜索需求、展示仪表盘 |
+| **spec-proposal-creation-cn** | "创建提案"、"新需求" | 生成带 EARS 需求的结构化提案 |
+| **spec-implementation-cn** | "实现提案"、"开发" | 以测试与进度跟踪的方式执行任务 |
+| **spec-archiving-cn** | "归档提案"、"合并规范" | 合并规范差异并创建归档 |
+| **spec-context-loading-cn** | "有哪些规范"、"显示变更" | 发现规范、搜索需求、展示仪表盘 |
 
 每个技能都在其 `SKILL.md` 文件中具备详细文档。
 
